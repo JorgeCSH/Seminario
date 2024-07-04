@@ -5,5 +5,5 @@ Lo hice para que pueda haber acceso mas rapido a los codigos y posibles variacio
 ## Informacion importante
 ### Sensores
 1. [Temperatura y calor](https://docs.rakwireless.com/Product-Categories/WisBlock/RAK1901/Overview/#product-features), Chipset: Sensirion SHTC3
-2. Infrarrojo: Chipset, Senba Sensing Technology AM312
-3. Buzzer, Chipset: Jiangsu Huaneng Electronics MLT-5020
+2. [Infrarrojo](https://docs.rakwireless.com/Product-Categories/WisBlock/RAK12006/Datasheet/#features): Chipset, Senba Sensing Technology AM312
+3. [Buzzer](https://docs.rakwireless.com/Product-Categories/WisBlock/RAK18001/Datasheet/#features), Chipset: Jiangsu Huaneng Electronics MLT-5020
