@@ -1,0 +1,139 @@
+#include <Arduino.h>
+#include <StarterKitNB.h>
+#include <Wire.h>
+
+// Definiciones y conexiones iniciales
+#define PIN_VBAT WB_A0
+#define VBAT_MV_PER_LSB (0.73242188F)
+#define VBAT_DIVIDER_COMP (1.73)
+#define REAL_VBAT_MV_PER_LSB (VBAT_DIVIDER_COMP * VBAT_MV_PER_LSB)
+
+#define SENSOR_PIN WB_IO6   // Pin para el sensor AM312
+#define BUZZER_CONTROL WB_IO1  // Pin para el buzzer
+
+// Configuración de PWM
+const int freq = 5000;
+const int ledChannel = 0;
+const int resolution = 8;
+
+// Frecuencias y duraciones para la sirena de policía
+const int freqLow = 500;   // Frecuencia baja (500 Hz)
+const int freqHigh = 1000; // Frecuencia alta (1000 Hz)
+const int durationLow = 300;  // Duración de la frecuencia baja (300 ms)
+const int durationHigh = 300; // Duración de la frecuencia alta (300 ms)
+
+// Variables de estado del sensor
+int gCurrentStatus = 0;
+
+// Variables de tiempo
+unsigned long startMillis = 0;
+const long captureDuration = 10000; // Duración de la captura (10 segundos)
+
+// Variables de conexión
+StarterKitNB sk;
+String apn = "m2m.entel.cl";
+String user = "entelpcs";
+String password = "entelpcs";
+String band = "B28 LTE";
+String Network = "NB";
+String clientId = "peru";
+String userBroker = "Benja_F";
+String passwordBroker = "aio_Wrfo66a5509oSMmO1j8HZNBPMmpH";
+String broker = "io.adafruit.com";
+int port = 1883;
+String topic1 = "Benja_F/feeds/test 1/json";
+String topic2 = "Benja_F/feeds/test 2/json";
+String topic3 = "Benja_F/feeds/bateria/json";
+float battery;
+
+void setup() {
+  // Inicializar Starter Kit
+  sk.Setup();
+  delay(500);
+  sk.UserAPN(apn, user, password);
+  sk.Connect(apn, band, Network);
+
+  // Configurar el pin del sensor y los LED
+  pinMode(SENSOR_PIN, INPUT);
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_BLUE, OUTPUT);
+
+  // Configurar el canal PWM
+  ledcSetup(ledChannel, freq, resolution);
+  ledcAttachPin(BUZZER_CONTROL, ledChannel);
+
+  // Inicializar comunicación serie
+  Serial.begin(115200);
+  time_t timeout = millis();
+  while (!Serial) {
+    if ((millis() - timeout) < 5000) {
+      delay(100);
+    } else {
+      break;
+    }
+  }
+  Serial.println("========================");
+  Serial.println("    RAK12006 test");
+  Serial.println("========================");
+
+  // Iniciar temporizador de captura
+  startMillis = millis();
+}
+
+void loop() {
+  unsigned long currentMillis = millis();
+  bool motionDetected = false;
+
+  // Capturar el estado del sensor durante 10 segundos
+  while (currentMillis - startMillis < captureDuration) {
+    gCurrentStatus = digitalRead(SENSOR_PIN);
+
+    if (gCurrentStatus == 0) { // Movimiento detectado
+      motionDetected = true;
+      break; // Salir del bucle de captura si se detecta movimiento
+    }
+
+    delay(100); // Leer el sensor cada 100 ms
+    currentMillis = millis();
+  }
+
+  if (motionDetected) {
+    Serial.println("IR detected ...");
+    digitalWrite(LED_GREEN, HIGH);  // Encender LED verde
+    digitalWrite(LED_BLUE, HIGH);   // Encender LED azul
+
+    // Activar la sirena
+    Serial.println("Iniciando sirena de policía...");
+    for (int i = 0; i < 10; i++) {  // Repetir 10 veces
+      ledcWriteTone(ledChannel, freqLow);  // Reproducir frecuencia baja
+      delay(durationLow);
+      ledcWriteTone(ledChannel, freqHigh); // Reproducir frecuencia alta
+      delay(durationHigh);
+    }
+    ledcWriteTone(ledChannel, 0); // Apagar el sonido
+    Serial.println("Sirena finalizada.");
+  } else {
+    Serial.println("IR not detected ... yet jejeje");
+    digitalWrite(LED_GREEN, LOW);  // Apagar LED verde
+    digitalWrite(LED_BLUE, LOW);   // Apagar LED azul
+  }
+
+  // Verificar y reconectar si es necesario
+  if (!sk.ConnectionStatus()) {
+    sk.Reconnect(apn, band, Network);
+    delay(1000);
+  }
+
+  // Leer el voltaje de la batería y enviar los datos
+  battery = (analogRead(PIN_VBAT) * REAL_VBAT_MV_PER_LSB / 1000);
+  if (!sk.LastMessageStatus) {
+    sk.ConnectBroker(clientId, userBroker, passwordBroker, 0, broker, port);
+    delay(1000);
+  }
+  sk.SendMessage(String(gCurrentStatus), topic1, 0, 0, 0, 0, 10000);  // Enviar estado del sensor
+  sk.SendMessage(String(battery), topic3, 0, 0, 0, 0, 10000);  // Enviar nivel de batería
+
+  // Reiniciar temporizador para el siguiente ciclo de captura
+  startMillis = millis();
+  delay(1000); // Pequeña pausa antes del siguiente ciclo
+}
